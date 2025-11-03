@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lotería MX — Multijugador</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>🎴 Lotería Mexicana — Multijugador</h1>
+
+  <section id="auth">
+    <input id="playerName" placeholder="Tu nombre" />
+    <input id="roomCode" placeholder="Código de sala (p.ej. ABCD)" />
+    <div class="buttons">
+      <button id="createRoom">Crear sala</button>
+      <button id="joinRoom">Unirme</button>
+    </div>
+    <p id="authMsg"></p>
+  </section>
+
+  <section id="game" class="hidden">
+    <div id="roomInfo"></div>
+
+    <div id="controlsHost" class="hidden">
+      <button id="startBtn">Iniciar juego</button>
+      <button id="pauseBtn">Pausar</button>
+      <button id="resumeBtn">Reanudar</button>
+      <button id="nextBtn">Siguiente carta</button>
+    </div>
+
+    <div id="status">
+      <div id="currentCard">Carta actual: —</div>
+      <div id="counters">Cantadas: 0 • Restantes: 0</div>
+    </div>
+
+    <h2>Tu tabla</h2>
+    <div id="board" class="board"></div>
+
+    <button id="loteriaBtn">¡Lotería!</button>
+    <p id="msg"></p>
+  </section>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

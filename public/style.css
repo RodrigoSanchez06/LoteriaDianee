@@ -1,0 +1,19 @@
+:root{
+  --rojo:#e57373; --verde:#009688; --verde-osc:#00796b;
+  --naranja:#f57c00; --naranja-osc:#e65100; --bg:#f8ecd4; --borde:#333;
+}
+*{box-sizing:border-box} body{font-family:Poppins,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);margin:0;padding:20px;text-align:center;color:#333}
+h1{background:var(--rojo);color:#fff;display:inline-block;padding:14px 18px;border-radius:12px;margin:0 0 16px}
+.hidden{display:none}
+#auth input{padding:10px;border-radius:8px;border:2px solid var(--borde);margin:4px;min-width:220px}
+.buttons{display:flex;justify-content:center;gap:8px;margin-top:8px}
+button{background:var(--verde);color:#fff;border:none;border-radius:8px;padding:10px 16px;cursor:pointer}
+button:hover{background:var(--verde-osc)}
+#controlsHost{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0 16px}
+.board{display:grid;grid-template-columns:repeat(4,120px);gap:10px;justify-content:center}
+.cell{background:#fff;border:2px solid var(--borde);border-radius:10px;padding:10px;min-height:70px;display:grid;place-items:center;cursor:pointer}
+.cell.marked{background:#ffcc80;border-color:var(--naranja-osc)}
+#currentCard,#counters{font-weight:700;margin:8px 0}
+#loteriaBtn{margin-top:12px;background:var(--naranja)}
+#loteriaBtn:hover{background:var(--naranja-osc)}
+#authMsg,#msg{min-height:24px}
