@@ -20,7 +20,7 @@ const currentCard = document.getElementById("currentCard");
 const counters = document.getElementById("counters");
 const boardEl = document.getElementById("board");
 const loteriaBtn = document.getElementById("loteriaBtn");
-const msg = document.getElementById("msg");
+const msg = document.getElementById("msg"); 
 
 let myBoard = [];
 let currentRoomId = null;
