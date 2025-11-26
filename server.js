@@ -5,7 +5,7 @@ import cors from "cors";
 
 const app = express();
 app.use(cors());
-app.use(express.static("public")); // sirve /public (index, css, js, img, etc.)
+app.use(express.static("public"));
 
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -13,8 +13,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 const PORT = process.env.PORT || 3000;
 
 /**
- * === Mazo con tus archivos de imagen ===
- * IMPORTANTE: Los nombres deben coincidir EXACTO con los archivos en /public/img
+ * Mazo con tus imágenes
  */
 const cartasBase = [
   "Cero.png",
@@ -23,7 +22,7 @@ const cartasBase = [
   "El mayor que.png",
   "El menor que.png",
   "El numero al cuadrado.png",
-  "El numero al cubo.png",
+  "El número al cubo.png",
   "El parentesis.png",
   "El pi.png",
   "El porcentaje.png",
@@ -54,10 +53,9 @@ const cartasBase = [
 const AUTO_MS = 3000;
 const MAX_JUGADORES = 6;
 
-// roomId -> { hostId, started, deck, called, interval, players: {socketId:{name, board}} }
+// roomId -> { hostId, started, deck, called, interval, autoMode, players: {socketId:{name, board}} }
 const rooms = new Map();
 
-// === Utils ===
 const shuffle = (arr) => {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -71,9 +69,15 @@ const makeRoomId = () => {
   return Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
 };
 
-// Devuelve 16 nombres de archivo (IDs)
 const makeBoard = () => shuffle([...cartasBase]).slice(0, 16);
 const makeDeck  = () => shuffle([...cartasBase]);
+
+function stopAuto(room) {
+  if (room.interval) {
+    clearInterval(room.interval);
+    room.interval = null;
+  }
+}
 
 function broadcastRoomState(roomId) {
   const room = rooms.get(roomId);
@@ -85,47 +89,61 @@ function broadcastRoomState(roomId) {
     calledCount: room.called.length,
     remaining: room.deck.length,
     hostSocketId: room.hostId,
-    currentCard: room.called[room.called.length - 1] || null // nombre de archivo
+    currentCard: room.called[room.called.length - 1] || null,
+    autoMode: room.autoMode
   };
   io.to(roomId).emit("room:state", data);
-}
-
-function stopAuto(room) {
-  if (room.interval) {
-    clearInterval(room.interval);
-    room.interval = null;
-  }
 }
 
 function nextCard(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.deck.length === 0) {
-    if (room) stopAuto(room);
-    io.to(roomId).emit("deck:finished");
+    if (room) {
+      stopAuto(room);
+      io.to(roomId).emit("deck:finished");
+    }
     broadcastRoomState(roomId);
     return;
   }
-  const card = room.deck.pop(); // nombre de archivo
+
+  const card = room.deck.pop();
   room.called.push(card);
-  io.to(roomId).emit("deck:card", { card, remaining: room.deck.length, calledCount: room.called.length });
+
+  io.to(roomId).emit("deck:card", {
+    card,
+    remaining: room.deck.length,
+    calledCount: room.called.length
+  });
+
   if (room.deck.length === 0) {
     stopAuto(room);
     io.to(roomId).emit("deck:finished");
   }
+
   broadcastRoomState(roomId);
 }
 
 function startAuto(roomId) {
   const room = rooms.get(roomId);
   if (!room || room.interval) return;
+  if (!room.autoMode) return;
   room.interval = setInterval(() => nextCard(roomId), AUTO_MS);
 }
 
-// Verifica tabla completa: todos los IDs de la tabla están en "called"
+function dealNewBoards(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  for (const socketId of Object.keys(room.players)) {
+    const board = makeBoard();
+    room.players[socketId].board = board;
+    io.to(socketId).emit("player:board", { board });
+  }
+}
+
 function verifyLoteria(room, socketId) {
   const player = room.players[socketId];
   if (!player) return false;
-  const { board } = player; // array de nombres de archivo
+  const { board } = player;
   return board.every(id => room.called.includes(id));
 }
 
@@ -142,13 +160,15 @@ io.on("connection", (socket) => {
       deck: [],
       called: [],
       interval: null,
+      autoMode: true, // modo inicial AUTOMÁTICO
       players: { [socket.id]: { name: name || "Jugador", board } }
     });
 
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.name = name || "Jugador";
-    socket.emit("player:board", { board }); // => array de filenames
+
+    socket.emit("player:board", { board });
     broadcastRoomState(roomId);
     cb?.({ ok: true, roomId });
   });
@@ -161,47 +181,105 @@ io.on("connection", (socket) => {
     if (Object.keys(room.players).length >= MAX_JUGADORES) {
       return cb?.({ ok: false, error: "Sala llena" });
     }
+
     const board = makeBoard();
     room.players[socket.id] = { name: name || "Jugador", board };
+
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.name = name || "Jugador";
+
     socket.emit("player:board", { board });
     broadcastRoomState(roomId);
     cb?.({ ok: true, roomId });
   });
 
-  // Iniciar juego (solo host)
+  // Iniciar partida (no cambia tableros, solo baraja/cantos)
+  function startNewGame(roomId) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    stopAuto(room);
+    room.started = true;
+    room.deck = makeDeck();
+    room.called = [];
+    broadcastRoomState(roomId);
+  }
+
+  // Iniciar juego
   socket.on("game:start", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
     if (!room || room.hostId !== socket.id) return;
 
-    room.started = true;
-    room.deck = makeDeck();
-    room.called = [];
-    stopAuto(room);
+    startNewGame(roomId);
     io.to(roomId).emit("game:started");
-    broadcastRoomState(roomId);
-    startAuto(roomId);
+
+    if (room.autoMode) {
+      startAuto(roomId);
+    }
   });
 
-  // Control host: Pausar/Reanudar/Avanzar
-  socket.on("deck:pause", () => {
-    const room = rooms.get(socket.data.roomId);
+  // Reiniciar: NUEVOS tableros + nuevas cartas desde 0
+  socket.on("game:reset", () => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
     if (!room || room.hostId !== socket.id) return;
-    stopAuto(room);
-    io.to(socket.data.roomId).emit("deck:paused");
+
+    // nuevos tableros para todos
+    dealNewBoards(roomId);
+
+    // baraja desde cero
+    startNewGame(roomId);
+    io.to(roomId).emit("game:reset");
+
+    if (room.autoMode) {
+      startAuto(roomId);
+    }
   });
 
+  // Cambiar modo auto/manual
+  socket.on("deck:setMode", ({ auto }) => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    if (!room || room.hostId !== socket.id) return;
+
+    room.autoMode = !!auto;
+
+    if (room.started) {
+      if (room.autoMode) {
+        startAuto(roomId);
+      } else {
+        stopAuto(room);
+      }
+    } else {
+      stopAuto(room);
+    }
+
+    broadcastRoomState(roomId);
+  });
+
+  // Pausar automático
+  socket.on("deck:pause", () => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    if (!room || room.hostId !== socket.id) return;
+
+    stopAuto(room);
+    io.to(roomId).emit("deck:paused");
+  });
+
+  // Reanudar automático
   socket.on("deck:resume", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
     if (!room || room.hostId !== socket.id) return;
+    if (!room.autoMode) return;
+
     startAuto(roomId);
     io.to(roomId).emit("deck:resumed");
   });
 
+  // Carta siguiente (manual)
   socket.on("deck:next", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
@@ -209,17 +287,42 @@ io.on("connection", (socket) => {
     nextCard(roomId);
   });
 
-  // Reclamar Lotería
+  // Carta previa (manual)
+  socket.on("deck:prev", () => {
+    const roomId = socket.data.roomId;
+    const room = rooms.get(roomId);
+    if (!room || room.hostId !== socket.id) return;
+
+    if (room.called.length === 0) return;
+
+    const last = room.called.pop();
+    room.deck.push(last);
+
+    const newCurrent = room.called[room.called.length - 1] || null;
+
+    io.to(roomId).emit("deck:card", {
+      card: newCurrent,
+      remaining: room.deck.length,
+      calledCount: room.called.length
+    });
+
+    broadcastRoomState(roomId);
+  });
+
+  // Lotería
   socket.on("loteria:claim", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
     if (!room) return;
+
     const valid = verifyLoteria(room, socket.id);
     if (valid) {
       stopAuto(room);
       io.to(roomId).emit("loteria:winner", { winner: room.players[socket.id].name });
     } else {
-      io.to(socket.id).emit("loteria:denied", { reason: "Aún no ganas. No han pasado todas tus cartas." });
+      io.to(socket.id).emit("loteria:denied", {
+        reason: "Aún no ganas. No han pasado todas tus cartas."
+      });
     }
   });
 
@@ -229,15 +332,14 @@ io.on("connection", (socket) => {
     if (!roomId) return;
     const room = rooms.get(roomId);
     if (!room) return;
+
     delete room.players[socket.id];
 
-    // Reasignar host
     if (room.hostId === socket.id) {
       const ids = Object.keys(room.players);
       room.hostId = ids[0] || null;
     }
 
-    // Cerrar sala si ya no hay jugadores
     if (Object.keys(room.players).length === 0) {
       stopAuto(room);
       rooms.delete(roomId);

@@ -1,144 +1,244 @@
 const socket = io();
 
-// Refs UI
+// UI refs
 const auth = document.getElementById("auth");
 const game = document.getElementById("game");
+
 const playerName = document.getElementById("playerName");
 const roomCode = document.getElementById("roomCode");
-const createRoom = document.getElementById("createRoom");
 const joinRoom = document.getElementById("joinRoom");
+const createRoom = document.getElementById("createRoom");
 const authMsg = document.getElementById("authMsg");
 
-const roomInfo = document.getElementById("roomInfo");
 const controlsHost = document.getElementById("controlsHost");
-const startBtn = document.getElementById("startBtn");
-const pauseBtn = document.getElementById("pauseBtn");
-const resumeBtn = document.getElementById("resumeBtn");
+const playPauseBtn = document.getElementById("playPauseBtn");
+const resetBtn = document.getElementById("resetBtn");
+const modeBtn = document.getElementById("modeBtn");
+
+const manualControls = document.getElementById("manualControls");
+const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 
-const currentCardImg = document.getElementById("currentCardImg");
-const currentCardCaption = document.getElementById("currentCardCaption");
-const counters = document.getElementById("counters");
 const boardEl = document.getElementById("board");
+const currentCardWrapper = document.getElementById("currentCardWrapper");
+const currentCardImg = document.getElementById("currentCardImg");
+const counters = document.getElementById("counters");
+
 const loteriaBtn = document.getElementById("loteriaBtn");
 const msg = document.getElementById("msg");
+const roomInfo = document.getElementById("roomInfo");
 
-let myBoard = [];              // array de filenames (IDs)
-let currentRoomId = null;
+let myBoard = [];
 let mySocketId = null;
 let isHost = false;
+let autoMode = true;   // modo inicial: automático
+let gameStarted = false;
+let isPaused = false;  // solo aplica en automático
 
-// cooldown para ¡Lotería!
-const LOTERIA_COOLDOWN_MS = 2000;
+const LOTERIA_COOLDOWN = 5000;
 let loteriaCooling = false;
 
-socket.on("connect", () => { mySocketId = socket.id; });
-
-// Helpers de UI
-function prettyLabel(id){ return (id || "").replace(/\.png$/i, ""); }
-function imgSrc(id){ return `img/${id}`; } // archivos están en /public/img
+// Helpers
+function imgSrc(id){ return `img/${id}`; }
 
 function setCurrentCard(id){
-  if (!id){
-    currentCardImg.src = "";
-    currentCardImg.alt = "Carta actual";
-    currentCardCaption.textContent = "Carta actual: —";
+  if(!id){
+    currentCardWrapper.classList.add("hidden");
     return;
   }
+  currentCardWrapper.classList.remove("hidden");
   currentCardImg.src = imgSrc(id);
-  currentCardImg.alt = prettyLabel(id);
-  currentCardCaption.textContent = `Carta actual: ${prettyLabel(id)}`;
 }
 
 function renderBoard(){
   boardEl.innerHTML = "";
-  myBoard.forEach((id) => {
-    const div = document.createElement("div");
-    div.className = "cell";
-    div.dataset.cardId = id;
+  const fifteen = myBoard.slice(0, 15); // 5×3
+
+  fifteen.forEach(id=>{
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.dataset.id = id;
+
+    cell.onclick = () => cell.classList.toggle("marked");
 
     const img = document.createElement("img");
     img.src = imgSrc(id);
-    img.alt = prettyLabel(id);
 
-    const label = document.createElement("div");
-    label.className = "label";
-    label.textContent = prettyLabel(id);
-
-    div.onclick = () => div.classList.toggle("marked");
-
-    div.appendChild(img);
-    div.appendChild(label);
-    boardEl.appendChild(div);
+    cell.appendChild(img);
+    boardEl.appendChild(cell);
   });
 }
 
-// Entrar al juego
-function enterGame() {
+function updateHostUI(){
+  controlsHost.classList.toggle("hidden", !isHost);
+
+  // Botón principal: Iniciar juego / Pausar / Reanudar
+  if (!gameStarted) {
+    playPauseBtn.textContent = "Iniciar juego";
+    playPauseBtn.disabled = false;
+  } else if (autoMode) {
+    playPauseBtn.textContent = isPaused ? "Reanudar" : "Pausar";
+    playPauseBtn.disabled = false;
+  } else {
+    // modo manual: este botón no aplica
+    playPauseBtn.textContent = "Iniciar juego";
+    playPauseBtn.disabled = true;
+  }
+
+  // Reiniciar solo cuando el juego está iniciado y no está corriendo (pausado o manual)
+  const showReset = gameStarted && (isPaused || !autoMode);
+  resetBtn.classList.toggle("hidden", !showReset);
+
+  // Texto del modo
+  modeBtn.textContent = autoMode ? "Modo: Automático" : "Modo: Manual";
+
+  // Botones manuales solo: host + juego iniciado + modo manual
+  const showManual = isHost && gameStarted && !autoMode;
+  manualControls.classList.toggle("hidden", !showManual);
+}
+
+function enterGame(){
   auth.classList.add("hidden");
   game.classList.remove("hidden");
   msg.textContent = "";
-  renderHostControls();
+  updateHostUI();
 }
-function renderHostControls(){ controlsHost.classList.toggle("hidden", !isHost); }
 
-// Acciones Auth
+// Auth
 createRoom.onclick = () => {
   authMsg.textContent = "";
-  socket.emit("room:create", { name: playerName.value || "Jugador" }, (res) => {
-    if (!res.ok) { authMsg.textContent = res.error || "No se pudo crear la sala"; return; }
-    currentRoomId = res.roomId; isHost = true; enterGame();
+  socket.emit("room:create",{name: playerName.value || "Jugador"}, res=>{
+    if(!res.ok){ authMsg.textContent = res.error || "No se pudo crear la sala"; return; }
+    isHost = true;
+    enterGame();
   });
 };
 
 joinRoom.onclick = () => {
   authMsg.textContent = "";
   const code = (roomCode.value || "").trim().toUpperCase();
-  if (!code) { authMsg.textContent = "Ingresa un código de sala"; return; }
-  socket.emit("room:join", { roomId: code, name: playerName.value || "Jugador" }, (res) => {
-    if (!res.ok) { authMsg.textContent = res.error || "No se pudo entrar a la sala"; return; }
-    currentRoomId = code; isHost = false; enterGame();
+  if (!code) { authMsg.textContent = "Ingresa un código"; return; }
+  socket.emit("room:join",{roomId: code, name: playerName.value || "Jugador"}, res=>{
+    if(!res.ok){ authMsg.textContent = res.error || "No se pudo entrar a la sala"; return; }
+    isHost = false;
+    enterGame();
   });
 };
 
-// Controles host
-startBtn.onclick  = () => socket.emit("game:start");
-pauseBtn.onclick  = () => socket.emit("deck:pause");
-resumeBtn.onclick = () => socket.emit("deck:resume");
-nextBtn.onclick   = () => socket.emit("deck:next");
+// Host controls
 
-// ¡Lotería! con cooldown
-loteriaBtn.onclick = () => {
-  if (loteriaCooling) return;
-  loteriaCooling = true; loteriaBtn.disabled = true;
-  socket.emit("loteria:claim");
-  setTimeout(() => { loteriaCooling = false; loteriaBtn.disabled = false; }, LOTERIA_COOLDOWN_MS);
+// Botón principal
+playPauseBtn.onclick = () => {
+  if (!gameStarted) {
+    socket.emit("game:start");
+  } else if (autoMode) {
+    if (isPaused) {
+      socket.emit("deck:resume");
+    } else {
+      socket.emit("deck:pause");
+    }
+  }
 };
 
-// Eventos servidor
+// Reiniciar
+resetBtn.onclick = () => {
+  socket.emit("game:reset");
+};
+
+// Modo
+modeBtn.onclick = () => {
+  socket.emit("deck:setMode", { auto: !autoMode });
+};
+
+// Manual prev/next
+nextBtn.onclick = () => socket.emit("deck:next");
+prevBtn.onclick = () => socket.emit("deck:prev");
+
+// Lotería
+loteriaBtn.onclick = () => {
+  if (loteriaCooling) return;
+  loteriaCooling = true;
+  loteriaBtn.disabled = true;
+
+  socket.emit("loteria:claim");
+
+  setTimeout(() => {
+    loteriaCooling = false;
+    loteriaBtn.disabled = false;
+  }, LOTERIA_COOLDOWN);
+};
+
+// Socket events
+socket.on("connect", () => { mySocketId = socket.id; });
+
 socket.on("player:board", ({ board }) => {
-  myBoard = board;            // array de filenames
+  myBoard = board;
   renderBoard();
 });
 
 socket.on("room:state", (state) => {
-  isHost = state.hostSocketId === mySocketId;
-  renderHostControls();
-  setCurrentCard(state.currentCard);
-  counters.textContent = `Cantadas: ${state.calledCount} • Restantes: ${state.remaining}`;
-  roomInfo.textContent = `Sala: ${state.roomId} • Jugadores: ${state.players.join(", ")} ${isHost ? "• (Eres host)" : ""}`;
-});
+  const prevAuto = autoMode;
+  isHost      = state.hostSocketId === mySocketId;
+  autoMode    = state.autoMode ?? true;
+  gameStarted = state.started;
 
-socket.on("game:started", () => { msg.textContent = "¡La partida comenzó!"; });
+  // si pasamos de manual -> automático, asumimos que ahora está corriendo
+  if (autoMode && !prevAuto) {
+    isPaused = false;
+  }
+
+  roomInfo.textContent =
+    `Sala: ${state.roomId} • Jugadores: ${state.players.join(", ")} ${isHost ? "• (Host)" : ""}`;
+
+  setCurrentCard(state.currentCard);
+
+  counters.textContent =
+    `Cantadas: ${state.calledCount} • Restantes: ${state.remaining}`;
+
+  updateHostUI();
+});
 
 socket.on("deck:card", ({ card, remaining, calledCount }) => {
   setCurrentCard(card);
-  counters.textContent = `Cantadas: ${calledCount} • Restantes: ${remaining}`;
+  counters.textContent =
+    `Cantadas: ${calledCount} • Restantes: ${remaining}`;
 });
 
-socket.on("deck:finished", () => { msg.textContent = "Ya no hay más cartas."; });
-socket.on("deck:paused",   () => { msg.textContent = "Pausado por el host."; });
-socket.on("deck:resumed",  () => { msg.textContent = "Reanudado por el host."; });
+socket.on("game:started", () => {
+  gameStarted = true;
+  isPaused = false;
+  msg.textContent = "¡La partida comenzó!";
+  updateHostUI();
+});
 
-socket.on("loteria:denied", ({ reason }) => { msg.textContent = reason; });
-socket.on("loteria:winner", ({ winner }) => { msg.textContent = `🎉 ¡Lotería! Ganó ${winner}`; });
+socket.on("game:reset", () => {
+  gameStarted = true;
+  isPaused = false;
+  setCurrentCard(null);
+  msg.textContent = "Partida reiniciada. Nuevos tableros.";
+  updateHostUI();
+});
+
+socket.on("deck:paused", () => {
+  isPaused = true;
+  updateHostUI();
+});
+
+socket.on("deck:resumed", () => {
+  isPaused = false;
+  updateHostUI();
+});
+
+socket.on("deck:finished", () => {
+  msg.textContent = "Ya no hay más cartas.";
+  isPaused = true;
+  updateHostUI();
+});
+
+socket.on("loteria:denied", ({ reason }) => {
+  msg.textContent = reason;
+});
+
+socket.on("loteria:winner", ({ winner }) => {
+  msg.textContent = `🎉 ¡Lotería! Ganó ${winner}`;
+});
