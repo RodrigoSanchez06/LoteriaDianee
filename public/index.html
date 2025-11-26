@@ -6,42 +6,66 @@
   <title>Lotería MX — Multijugador</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <h1>🎴 Lotería Mexicana — Multijugador</h1>
 
+  <!-- PANTALLA INICIAL -->
   <section id="auth">
-    <input id="playerName" placeholder="Tu nombre" />
-    <input id="roomCode" placeholder="Código de sala (p.ej. ABCD)" />
-    <div class="buttons">
-      <button id="createRoom">Crear sala</button>
+    <div class="auth-block">
+      <input id="playerName" placeholder="Tu nombre" />
+    </div>
+
+    <div class="auth-block">
+      <h3>Unirse a una sala</h3>
+      <input id="roomCode" placeholder="Código (p. ej. ABCD)" />
       <button id="joinRoom">Unirme</button>
     </div>
+
+    <div class="auth-block">
+      <h3>Crear nueva sala</h3>
+      <button id="createRoom">Crear sala</button>
+    </div>
+
     <p id="authMsg"></p>
   </section>
 
+  <!-- JUEGO -->
   <section id="game" class="hidden">
+
     <div id="roomInfo"></div>
 
     <div id="controlsHost" class="hidden">
-      <button id="startBtn">Iniciar juego</button>
-      <button id="pauseBtn">Pausar</button>
-      <button id="resumeBtn">Reanudar</button>
-      <button id="nextBtn">Siguiente carta</button>
+      <button id="playPauseBtn">Iniciar juego</button>
+      <button id="resetBtn" class="hidden">Reiniciar</button>
+      <button id="modeBtn">Modo: Automático</button>
     </div>
 
-    <div id="status">
-      <div class="current-wrap">
-        <img id="currentCardImg" alt="Carta actual" />
-        <div id="currentCardCaption" class="caption">Carta actual: —</div>
+    <div id="gameLayout">
+
+      <div id="leftPanel">
+        <h2>Tu tabla</h2>
+        <div id="board" class="board"></div>
+        <button id="loteriaBtn">¡Lotería!</button>
+        <p id="msg"></p>
       </div>
-      <div id="counters">Cantadas: 0 • Restantes: 0</div>
+
+      <div id="rightPanel">
+        <h2>Carta actual</h2>
+
+        <div id="currentCardWrapper" class="hidden">
+          <img id="currentCardImg" alt="" />
+        </div>
+
+        <div id="manualControls" class="hidden">
+          <button id="prevBtn">Carta previa</button>
+          <button id="nextBtn">Siguiente carta</button>
+        </div>
+
+        <div id="counters">Cantadas: 0 • Restantes: 0</div>
+      </div>
+
     </div>
-
-    <h2>Tu tabla</h2>
-    <div id="board" class="board"></div>
-
-    <button id="loteriaBtn">¡Lotería!</button>
-    <p id="msg"></p>
   </section>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
