@@ -2,18 +2,57 @@
   --rojo:#e57373; --verde:#009688; --verde-osc:#00796b;
   --naranja:#f57c00; --naranja-osc:#e65100; --bg:#f8ecd4; --borde:#333;
 }
-*{box-sizing:border-box} body{font-family:Poppins,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);margin:0;padding:20px;text-align:center;color:#333}
+*{box-sizing:border-box}
+body{
+  font-family:Poppins,system-ui,Segoe UI,Roboto,sans-serif;
+  background:var(--bg);margin:0;padding:20px;text-align:center;color:#333
+}
 h1{background:var(--rojo);color:#fff;display:inline-block;padding:14px 18px;border-radius:12px;margin:0 0 16px}
 .hidden{display:none}
+
 #auth input{padding:10px;border-radius:8px;border:2px solid var(--borde);margin:4px;min-width:220px}
 .buttons{display:flex;justify-content:center;gap:8px;margin-top:8px}
 button{background:var(--verde);color:#fff;border:none;border-radius:8px;padding:10px 16px;cursor:pointer}
 button:hover{background:var(--verde-osc)}
+
 #controlsHost{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:8px 0 16px}
-.board{display:grid;grid-template-columns:repeat(4,120px);gap:10px;justify-content:center}
-.cell{background:#fff;border:2px solid var(--borde);border-radius:10px;padding:10px;min-height:70px;display:grid;place-items:center;cursor:pointer}
+
+#status{display:flex;gap:16px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin:10px 0 14px}
+.current-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:6px
+}
+#currentCardImg{
+  width: clamp(130px, 20vw, 220px);
+  aspect-ratio: 430 / 640;     /* mantiene proporción 430x640 */
+  object-fit: cover;
+  border: 3px dashed #444;
+  border-radius: 12px;
+  background:#fff;
+}
+.caption{font-weight:700}
+
+.board{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap:10px;justify-content:center;max-width: min(95vw, 520px);margin:0 auto;
+}
+.cell{
+  background:#fff;border:2px solid var(--borde);border-radius:10px;padding:6px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;
+}
+.cell img{
+  width:100%;
+  aspect-ratio: 430 / 640;
+  object-fit: cover;
+  border-radius:8px;
+  display:block;
+}
+.cell .label{
+  font-size:.85rem;font-weight:600;line-height:1.1;
+}
 .cell.marked{background:#ffcc80;border-color:var(--naranja-osc)}
-#currentCard,#counters{font-weight:700;margin:8px 0}
+
+#counters{font-weight:700;margin:8px 0}
 #loteriaBtn{margin-top:12px;background:var(--naranja)}
 #loteriaBtn:hover{background:var(--naranja-osc)}
 #authMsg,#msg{min-height:24px}

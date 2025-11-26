@@ -5,23 +5,51 @@ import cors from "cors";
 
 const app = express();
 app.use(cors());
-app.use(express.static("public")); // sirve el cliente si lo pones en /public
+app.use(express.static("public")); // sirve /public (index, css, js, img, etc.)
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
 
-// === Datos base ===
+/**
+ * === Mazo con tus archivos de imagen ===
+ * IMPORTANTE: Los nombres deben coincidir EXACTO con los archivos en /public/img
+ */
 const cartasBase = [
-  "🐓 El Gallo", "😈 El Diablo", "👩‍🦰 La Dama", "🎩 El Catrín",
-  "☂️ El Paraguas", "🧜‍♀️ La Sirena", "🪜 La Escalera", "🍾 La Botella",
-  "🛢️ El Barril", "🌳 El Árbol", "🍈 El Melón", "🦸‍♂️ El Valiente",
-  "🎩 El Gorrito", "💀 La Muerte", "🍐 La Pera", "🏳️ La Bandera"
+  "Cero.png",
+  "El alebrije.png",
+  "El igual.png",
+  "El mayor que.png",
+  "El menor que.png",
+  "El numero al cuadrado.png",
+  "El numero al cubo.png",
+  "El parentesis.png",
+  "El pi.png",
+  "El porcentaje.png",
+  "I.png",
+  "La division.png",
+  "La jerarquia de operaciones.png",
+  "La multiplicacion de signos distintos.png",
+  "La multiplicacion de signos iguales.png",
+  "La Multiplicacion.png",
+  "La raiz cuadrada.png",
+  "La raiz cubica.png",
+  "La resta.png",
+  "La suma.png",
+  "Las fracciones.png",
+  "Las Incognitas.png",
+  "Las Raices.png",
+  "Los decimales.png",
+  "Los exponentes.png",
+  "Los Impares.png",
+  "Los Pares.png",
+  "N.png",
+  "Q.png",
+  "R.png",
+  "UNO.png",
+  "Z.png"
 ];
-// Puedes luego extender a 54 sin cambiar la lógica
 
 const AUTO_MS = 3000;
 const MAX_JUGADORES = 6;
@@ -43,8 +71,9 @@ const makeRoomId = () => {
   return Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
 };
 
+// Devuelve 16 nombres de archivo (IDs)
 const makeBoard = () => shuffle([...cartasBase]).slice(0, 16);
-const makeDeck = () => shuffle([...cartasBase]);
+const makeDeck  = () => shuffle([...cartasBase]);
 
 function broadcastRoomState(roomId) {
   const room = rooms.get(roomId);
@@ -56,7 +85,7 @@ function broadcastRoomState(roomId) {
     calledCount: room.called.length,
     remaining: room.deck.length,
     hostSocketId: room.hostId,
-    currentCard: room.called[room.called.length - 1] || null
+    currentCard: room.called[room.called.length - 1] || null // nombre de archivo
   };
   io.to(roomId).emit("room:state", data);
 }
@@ -76,7 +105,7 @@ function nextCard(roomId) {
     broadcastRoomState(roomId);
     return;
   }
-  const card = room.deck.pop();
+  const card = room.deck.pop(); // nombre de archivo
   room.called.push(card);
   io.to(roomId).emit("deck:card", { card, remaining: room.deck.length, calledCount: room.called.length });
   if (room.deck.length === 0) {
@@ -92,12 +121,12 @@ function startAuto(roomId) {
   room.interval = setInterval(() => nextCard(roomId), AUTO_MS);
 }
 
+// Verifica tabla completa: todos los IDs de la tabla están en "called"
 function verifyLoteria(room, socketId) {
   const player = room.players[socketId];
   if (!player) return false;
-  const { board } = player;
-  // Reglas: tabla COMPLETA y TODAS cantadas
-  return board.every(c => room.called.includes(c));
+  const { board } = player; // array de nombres de archivo
+  return board.every(id => room.called.includes(id));
 }
 
 io.on("connection", (socket) => {
@@ -119,7 +148,7 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.name = name || "Jugador";
-    socket.emit("player:board", { board });
+    socket.emit("player:board", { board }); // => array de filenames
     broadcastRoomState(roomId);
     cb?.({ ok: true, roomId });
   });
@@ -180,7 +209,7 @@ io.on("connection", (socket) => {
     nextCard(roomId);
   });
 
-  // Reclamar Lotería (con verificación en servidor)
+  // Reclamar Lotería
   socket.on("loteria:claim", () => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
@@ -189,13 +218,12 @@ io.on("connection", (socket) => {
     if (valid) {
       stopAuto(room);
       io.to(roomId).emit("loteria:winner", { winner: room.players[socket.id].name });
-      // (opcional) room.started = false; // para permitir nueva partida sin recrear sala
     } else {
-      // Mensaje genérico (no revelamos qué falta, como pediste)
       io.to(socket.id).emit("loteria:denied", { reason: "Aún no ganas. No han pasado todas tus cartas." });
     }
   });
 
+  // Desconexión
   socket.on("disconnect", () => {
     const roomId = socket.data.roomId;
     if (!roomId) return;
@@ -203,13 +231,13 @@ io.on("connection", (socket) => {
     if (!room) return;
     delete room.players[socket.id];
 
-    // reasignar host si era el host
+    // Reasignar host
     if (room.hostId === socket.id) {
       const ids = Object.keys(room.players);
       room.hostId = ids[0] || null;
     }
 
-    // si ya no hay jugadores, cerrar sala
+    // Cerrar sala si ya no hay jugadores
     if (Object.keys(room.players).length === 0) {
       stopAuto(room);
       rooms.delete(roomId);
