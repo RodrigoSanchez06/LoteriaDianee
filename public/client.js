@@ -39,10 +39,12 @@ const LOTERIA_COOLDOWN = 5000;
 let loteriaCooling = false;
 
 // Helpers
-function imgSrc(id){ return `img/${id}`; }
+function imgSrc(id) {
+  return `img/${id}`;
+}
 
-function setCurrentCard(id){
-  if(!id){
+function setCurrentCard(id) {
+  if (!id) {
     currentCardWrapper.classList.add("hidden");
     return;
   }
@@ -50,11 +52,11 @@ function setCurrentCard(id){
   currentCardImg.src = imgSrc(id);
 }
 
-function renderBoard(){
+function renderBoard() {
   boardEl.innerHTML = "";
   const fifteen = myBoard.slice(0, 15); // 5×3
 
-  fifteen.forEach(id=>{
+  fifteen.forEach((id) => {
     const cell = document.createElement("div");
     cell.className = "cell";
     cell.dataset.id = id;
@@ -69,10 +71,10 @@ function renderBoard(){
   });
 }
 
-function updateHostUI(){
+function updateHostUI() {
   controlsHost.classList.toggle("hidden", !isHost);
 
-  // Botón principal: Iniciar juego / Pausar / Reanudar
+  // Botón principal (Iniciar / Pausar / Reanudar)
   if (!gameStarted) {
     playPauseBtn.textContent = "Iniciar juego";
     playPauseBtn.disabled = false;
@@ -80,24 +82,41 @@ function updateHostUI(){
     playPauseBtn.textContent = isPaused ? "Reanudar" : "Pausar";
     playPauseBtn.disabled = false;
   } else {
-    // modo manual: este botón no aplica
+    // Modo manual → no se usa el botón principal
     playPauseBtn.textContent = "Iniciar juego";
     playPauseBtn.disabled = true;
   }
 
-  // Reiniciar solo cuando el juego está iniciado y no está corriendo (pausado o manual)
+  // Mostrar Reiniciar cuando:
+  // - el juego está iniciado
+  // - está pausado (auto) o en modo manual
   const showReset = gameStarted && (isPaused || !autoMode);
   resetBtn.classList.toggle("hidden", !showReset);
 
-  // Texto del modo
+  // Texto del modo actual
   modeBtn.textContent = autoMode ? "Modo: Automático" : "Modo: Manual";
 
-  // Botones manuales solo: host + juego iniciado + modo manual
-  const showManual = isHost && gameStarted && !autoMode;
-  manualControls.classList.toggle("hidden", !showManual);
+  // Solo se puede cambiar modo cuando:
+  // - hay host
+  // - el juego ya empezó
+  // - y si está en automático, debe estar PAUSADO para pasar a manual
+  const canChangeMode =
+    isHost &&
+    gameStarted &&
+    (isPaused || !autoMode); // si ya es manual, puede volver a auto
+
+  modeBtn.disabled = false;
+
+
+  // Controles manuales únicamente cuando:
+  // - el host
+  // - el juego ya empezó
+  // - modo es manual
+  const showManualControls = isHost && gameStarted && !autoMode;
+  manualControls.classList.toggle("hidden", !showManualControls);
 }
 
-function enterGame(){
+function enterGame() {
   auth.classList.add("hidden");
   game.classList.remove("hidden");
   msg.textContent = "";
@@ -107,22 +126,39 @@ function enterGame(){
 // Auth
 createRoom.onclick = () => {
   authMsg.textContent = "";
-  socket.emit("room:create",{name: playerName.value || "Jugador"}, res=>{
-    if(!res.ok){ authMsg.textContent = res.error || "No se pudo crear la sala"; return; }
-    isHost = true;
-    enterGame();
-  });
+  socket.emit(
+    "room:create",
+    { name: playerName.value || "Jugador" },
+    (res) => {
+      if (!res.ok) {
+        authMsg.textContent = res.error || "No se pudo crear la sala";
+        return;
+      }
+      isHost = true;
+      enterGame();
+    }
+  );
 };
 
 joinRoom.onclick = () => {
   authMsg.textContent = "";
   const code = (roomCode.value || "").trim().toUpperCase();
-  if (!code) { authMsg.textContent = "Ingresa un código"; return; }
-  socket.emit("room:join",{roomId: code, name: playerName.value || "Jugador"}, res=>{
-    if(!res.ok){ authMsg.textContent = res.error || "No se pudo entrar a la sala"; return; }
-    isHost = false;
-    enterGame();
-  });
+  if (!code) {
+    authMsg.textContent = "Ingresa un código";
+    return;
+  }
+  socket.emit(
+    "room:join",
+    { roomId: code, name: playerName.value || "Jugador" },
+    (res) => {
+      if (!res.ok) {
+        authMsg.textContent = res.error || "No se pudo entrar a la sala";
+        return;
+      }
+      isHost = false;
+      enterGame();
+    }
+  );
 };
 
 // Host controls
@@ -145,16 +181,22 @@ resetBtn.onclick = () => {
   socket.emit("game:reset");
 };
 
-// Modo
 modeBtn.onclick = () => {
+  // Si estamos en automático, solo permitir cambiar si está PAUSADO
+  if (autoMode && !isPaused) {
+    msg.textContent = "Pausa el juego antes de cambiar al modo manual.";
+    return;
+  }
+
   socket.emit("deck:setMode", { auto: !autoMode });
 };
+
 
 // Manual prev/next
 nextBtn.onclick = () => socket.emit("deck:next");
 prevBtn.onclick = () => socket.emit("deck:prev");
 
-// Lotería
+// Lotería (con cooldown)
 loteriaBtn.onclick = () => {
   if (loteriaCooling) return;
   loteriaCooling = true;
@@ -169,7 +211,9 @@ loteriaBtn.onclick = () => {
 };
 
 // Socket events
-socket.on("connect", () => { mySocketId = socket.id; });
+socket.on("connect", () => {
+  mySocketId = socket.id;
+});
 
 socket.on("player:board", ({ board }) => {
   myBoard = board;
@@ -178,8 +222,9 @@ socket.on("player:board", ({ board }) => {
 
 socket.on("room:state", (state) => {
   const prevAuto = autoMode;
-  isHost      = state.hostSocketId === mySocketId;
-  autoMode    = state.autoMode ?? true;
+
+  isHost = state.hostSocketId === mySocketId;
+  autoMode = state.autoMode ?? true;
   gameStarted = state.started;
 
   // si pasamos de manual -> automático, asumimos que ahora está corriendo
@@ -188,7 +233,9 @@ socket.on("room:state", (state) => {
   }
 
   roomInfo.textContent =
-    `Sala: ${state.roomId} • Jugadores: ${state.players.join(", ")} ${isHost ? "• (Host)" : ""}`;
+    `Sala: ${state.roomId} • Jugadores: ${state.players.join(", ")} ${
+      isHost ? "• (Host)" : ""
+    }`;
 
   setCurrentCard(state.currentCard);
 

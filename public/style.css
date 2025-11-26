@@ -29,7 +29,9 @@ h1{
   margin-bottom:18px;
 }
 
-.hidden{display:none}
+.hidden{
+  display:none !important;
+}
 
 /* PANTALLA INICIAL */
 
